@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confirming your subscription…</title>
+    <style>
+      body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1f2937; background: #f9fafb; }
+      .card { max-width: 460px; margin: 12vh auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 32px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { color: #6b7280; font-size: 14px; margin: 0; }
+      .ok { color: #047857; }
+      .err { color: #b91c1c; }
+      ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 14px; text-align: left; display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <!-- This page is where the email's confirmation link lands:
+           https://<CONFIRM_BASE_URL>/confirm?token=...
+           It reads the token and posts it to our backend, which calls
+           POST /subscriptions/confirm { token } with the API key. -->
+      <h1 id="title">Confirming your subscription…</h1>
+      <p id="detail">One moment.</p>
+      <ul id="results"></ul>
+    </div>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const token = new URLSearchParams(location.search).get('token');
+
+      if (!token) {
+        $('title').textContent = 'Invalid link';
+        $('title').className = 'err';
+        $('detail').textContent = 'This confirmation link is missing its token.';
+      } else {
+        try {
+          const res = await fetch('/api/confirm-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.code === 'INVALID_TOKEN'
+            ? 'This link is invalid or has expired.'
+            : (data.error || 'Confirmation failed.'));
+
+          $('title').textContent = "You're subscribed 🎉";
+          $('title').className = 'ok';
+          $('detail').textContent = data.alreadyConfirmed
+            ? 'This subscription was already confirmed.'
+            : 'Thanks for confirming.';
+          (data.results || []).forEach((r) => {
+            const li = document.createElement('li');
+            li.textContent = `• ${r.outcome.replace('_', ' ')}${r.contactStatus ? ' (' + r.contactStatus + ')' : ''}`;
+            $('results').append(li);
+          });
+        } catch (err) {
+          $('title').textContent = 'Could not confirm';
+          $('title').className = 'err';
+          $('detail').textContent = err.message;
+        }
+      }
+    </script>
+  </body>
+</html>

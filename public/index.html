@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Subscribe — Groupmail example</title>
+    <style>
+      :root { --ink: #1f2937; --muted: #6b7280; --brand: #2563eb; --line: #e5e7eb; --ok: #047857; --err: #b91c1c; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: #f9fafb; }
+      .card { max-width: 460px; margin: 6vh auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 28px 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p.sub { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+      label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+      input[type=text], input[type=email] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+      input:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+      .row { display: flex; gap: 12px; }
+      .row > div { flex: 1; }
+      fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 14px 0 0; padding: 10px 12px; }
+      legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+      .opt { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: 14px; margin: 4px 0; }
+      .opt label { margin: 0; font-weight: 400; }
+      button { width: 100%; margin-top: 20px; padding: 11px; background: var(--brand); color: #fff; border: 0; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      button.ghost { background: #fff; color: var(--brand); border: 1px solid var(--brand); }
+      .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+      .msg { margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 14px; display: none; }
+      .msg.ok { display: block; background: #ecfdf5; color: var(--ok); }
+      .msg.err { display: block; background: #fef2f2; color: var(--err); }
+      .pin-input { letter-spacing: 8px; text-align: center; font-size: 22px; text-transform: uppercase; }
+      .hidden { display: none; }
+      .results { margin-top: 14px; font-size: 14px; }
+      .results li { margin: 2px 0; }
+      code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <!-- ── Step 1: signup form ───────────────────────────────────────────── -->
+      <section id="step-signup">
+        <h1>Join our mailing list</h1>
+        <p class="sub">Double opt-in — we'll email you to confirm.</p>
+
+        <form id="signup-form" autocomplete="on">
+          <div class="row">
+            <div>
+              <label for="firstname">First name</label>
+              <input type="text" id="firstname" name="firstname" />
+            </div>
+            <div>
+              <label for="lastname">Last name</label>
+              <input type="text" id="lastname" name="lastname" />
+            </div>
+          </div>
+
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email" required />
+
+          <fieldset id="groups-fieldset">
+            <legend>Lists</legend>
+            <div id="groups"></div>
+          </fieldset>
+
+          <fieldset id="method-fieldset">
+            <legend>Confirmation method</legend>
+            <div class="opt"><input type="radio" id="m-both" name="method" value="both" checked /><label for="m-both">PIN &amp; link</label></div>
+            <div class="opt"><input type="radio" id="m-pin" name="method" value="pin" /><label for="m-pin">PIN only</label></div>
+            <div class="opt"><input type="radio" id="m-link" name="method" value="link" /><label for="m-link">Link only</label></div>
+          </fieldset>
+
+          <!-- Honeypot: hidden from humans, tempting to bots. Forwarded as subscriber.honeypot. -->
+          <div class="hp" aria-hidden="true"><label for="website">Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off" /></div>
+
+          <button type="submit" id="submit-btn">Subscribe</button>
+        </form>
+        <div class="msg" id="signup-msg"></div>
+      </section>
+
+      <!-- ── Step 2 (PIN): enter the PIN from the email ────────────────────── -->
+      <section id="step-pin" class="hidden">
+        <h1>Check your email</h1>
+        <p class="sub" id="pin-sub">Enter the 5-character PIN we just emailed you.</p>
+        <form id="pin-form">
+          <label for="pin">Confirmation PIN</label>
+          <input type="text" id="pin" class="pin-input" maxlength="5" autocomplete="one-time-code" required />
+          <button type="submit" id="pin-btn">Confirm</button>
+        </form>
+        <button class="ghost" id="resend-btn" type="button">Resend email</button>
+        <div class="msg" id="pin-msg"></div>
+      </section>
+
+      <!-- ── Step 2 (link only): nothing to type ───────────────────────────── -->
+      <section id="step-link" class="hidden">
+        <h1>Almost there</h1>
+        <p class="sub">We emailed you a confirmation link — click it to finish subscribing.</p>
+        <button class="ghost" id="resend-link-btn" type="button">Resend email</button>
+        <div class="msg" id="link-msg"></div>
+      </section>
+
+      <!-- ── Done ──────────────────────────────────────────────────────────── -->
+      <section id="step-done" class="hidden">
+        <h1>You're subscribed 🎉</h1>
+        <p class="sub">Thanks for confirming.</p>
+        <ul class="results" id="done-results"></ul>
+      </section>
+    </div>
+
+    <script type="module">
+      // All dynamic text is set via textContent — never innerHTML — so nothing
+      // a user types can become markup. (Same rule as the production widget.)
+      const $ = (id) => document.getElementById(id);
+      const show = (id) => $(id).classList.remove('hidden');
+      const hide = (id) => $(id).classList.add('hidden');
+      const setMsg = (id, text, kind) => { const el = $(id); el.textContent = text; el.className = 'msg ' + kind; };
+
+      let attemptId = null;
+
+      // Load non-secret config and render a checkbox per group.
+      const cfg = await (await fetch('/api/config')).json();
+      const groupsEl = $('groups');
+      if (!cfg.groupIds.length) {
+        groupsEl.textContent = 'No lists configured (set GROUPMAIL_GROUP_IDS).';
+      } else {
+        cfg.groupIds.forEach((id, i) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'opt';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.checked = true; cb.value = id; cb.id = 'g' + i; cb.dataset.group = '1';
+          const lab = document.createElement('label');
+          lab.htmlFor = 'g' + i; lab.textContent = 'List ' + (i + 1);
+          wrap.append(cb, lab);
+          groupsEl.append(wrap);
+        });
+      }
+      // Disable the link options if the backend has no public HTTPS confirm URL.
+      if (!cfg.linkFlowEnabled) {
+        for (const v of ['m-link', 'm-both']) $(v).disabled = true;
+        $('m-pin').checked = true;
+      }
+
+      const selectedGroupIds = () =>
+        [...document.querySelectorAll('[data-group]:checked')].map((c) => c.value);
+
+      $('signup-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const method = document.querySelector('input[name=method]:checked').value;
+        const groupIds = selectedGroupIds();
+        if (!groupIds.length) { setMsg('signup-msg', 'Please choose at least one list.', 'err'); return; }
+        $('submit-btn').disabled = true;
+        try {
+          const res = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: $('email').value.trim(),
+              firstname: $('firstname').value.trim(),
+              lastname: $('lastname').value.trim(),
+              method,
+              groupIds,
+              website: $('website').value, // honeypot
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Subscription failed');
+
+          attemptId = data.attemptId;
+          // Note: a spam/honeypot/duplicate attempt also returns 201 "pending"
+          // by design — there's no way (or need) to tell from the client.
+          hide('step-signup');
+          if (data.method === 'link') show('step-link');
+          else show('step-pin');
+        } catch (err) {
+          setMsg('signup-msg', err.message, 'err');
+          $('submit-btn').disabled = false;
+        }
+      });
+
+      $('pin-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        $('pin-btn').disabled = true;
+        try {
+          const res = await fetch('/api/confirm-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attemptId, pin: $('pin').value.trim() }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(messageForCode(data.code, data.error));
+          finish(data.results);
+        } catch (err) {
+          setMsg('pin-msg', err.message, 'err');
+          $('pin-btn').disabled = false;
+        }
+      });
+
+      for (const btnId of ['resend-btn', 'resend-link-btn']) {
+        $(btnId).addEventListener('click', async () => {
+          $(btnId).disabled = true;
+          const msgId = btnId === 'resend-btn' ? 'pin-msg' : 'link-msg';
+          try {
+            const res = await fetch('/api/resend', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ attemptId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(messageForCode(data.code, data.error));
+            setMsg(msgId, 'Sent — check your email again.', 'ok');
+          } catch (err) {
+            setMsg(msgId, err.message, 'err');
+          } finally {
+            setTimeout(() => { $(btnId).disabled = false; }, 2000);
+          }
+        });
+      }
+
+      function finish(results) {
+        hide('step-pin'); hide('step-link'); show('step-done');
+        const ul = $('done-results');
+        (results || []).forEach((r) => {
+          const li = document.createElement('li');
+          li.textContent = `${r.outcome.replace('_', ' ')}${r.contactStatus ? ' (' + r.contactStatus + ')' : ''}`;
+          ul.append(li);
+        });
+      }
+
+      function messageForCode(code, fallback) {
+        switch (code) {
+          case 'INVALID_PIN': return 'That PIN is incorrect — please try again.';
+          case 'ATTEMPT_LOCKED': return 'Too many incorrect attempts. Please start over.';
+          case 'PIN_EXPIRED': return 'That PIN has expired — tap “Resend email”.';
+          case 'RATE_LIMITED': return 'Too many attempts — please try again later.';
+          case 'RESEND_COOLDOWN': return 'Please wait a moment before resending.';
+          default: return fallback || 'Something went wrong.';
+        }
+      }
+    </script>
+  </body>
+</html>
