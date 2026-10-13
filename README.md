@@ -22,7 +22,8 @@ The Subscriptions API gives you **verifiable, GDPR-compliant double opt-in**:
 2. Your backend calls Groupmail, which **emails the subscriber** a PIN and/or a
    confirmation link.
 3. Only when the subscriber proves they own the inbox (returns the PIN, or clicks
-   the link) is the contact created — `active` — in your group(s).
+   the link) is the contact created — `active` — in your group(s), or reactivated
+   if they had unsubscribed.
 
 **Key invariant:** Groupmail always sends the email, and the **PIN / link token
 is never returned to the API caller.** That email is the only channel carrying
@@ -39,7 +40,7 @@ PIN/link, one confirmation activates them everywhere.
 | Sending the confirmation email (PIN + link) | The signup form / subscriber UX |
 | Generating & verifying the PIN and link token | The PIN-entry field, the link landing page |
 | Abuse safeguards (rate limits, spam, honeypot, brute-force lockout) | Forwarding subscriber signals (IP, honeypot) |
-| Creating the contact(s) on confirm + firing webhooks | Polling/handling the result, your own error UX |
+| Creating (or reactivating) the contact(s) on confirm + firing webhooks | Polling/handling the result, your own error UX |
 
 ---
 
@@ -85,7 +86,8 @@ Subscriber fills your form
    LINK ──────┘  subscriber clicks https://you.example/confirm?token=…
                   └─▶ your backend: POST /subscriptions/confirm { token }
 
-  on confirm → contacts created (active) in every requested group,
+  on confirm → contacts created (active) in every requested group
+               (a contact who had unsubscribed is reactivated),
                group events recorded, webhooks fired
 ```
 
@@ -172,16 +174,25 @@ page. The token alone identifies the attempt (no `attemptId` needed).
   "alreadyConfirmed": false,
   "results": [
     { "groupId": "6633aa...e1", "outcome": "subscribed", "contactId": "…" },
-    { "groupId": "6633bb...e2", "outcome": "already_subscribed", "contactStatus": "unsubscribed" }
+    { "groupId": "6633bb...e2", "outcome": "subscribed", "contactId": "…", "contactStatus": "active", "reactivated": true },
+    { "groupId": "6633cc...e3", "outcome": "already_subscribed", "contactId": "…", "contactStatus": "bounced" }
   ]
 }
 ```
 
 | `outcome` | Meaning |
 |---|---|
-| `subscribed` | contact created `active` in that group |
-| `already_subscribed` | a contact with that email already exists; `contactStatus` is returned. **No automatic reactivation** of an `unsubscribed`/`bounced` contact — that compliance decision is yours. |
+| `subscribed` | the contact is now `active` in that group. Usually it was just created. If a contact with that email had **unsubscribed**, it is reactivated instead, and the result carries `reactivated: true` and `contactStatus: "active"`. |
+| `already_subscribed` | a contact with that email was already in the group and nothing changed; `contactId` and `contactStatus` are returned. `active` means it already receives mailings. Any other status (`bounced`, `complaint`, or one the list owner set) means it receives no mailings and was **not** reactivated: only an unsubscribe is the subscriber's to undo. |
 | `group_not_found` | group was deleted between start and confirm; skipped |
+
+> **Changed 13 Oct 2026 (API v0.30.0):** an `unsubscribed` contact is now
+> reactivated on confirm. Before, it came back as `already_subscribed` with
+> `contactStatus: "unsubscribed"` and stayed unsubscribed, so someone who
+> unsubscribed by mistake couldn't rejoin. No new `outcome` value was added, so
+> code that branches on `outcome` keeps working; read `reactivated` if you need to
+> tell a rejoin from a new contact. If your integration worked around the old
+> behaviour, you can remove the workaround.
 
 Confirming an already-confirmed attempt **replays** the original result
 (`alreadyConfirmed: true`, `200`) — retries are safe.
@@ -223,10 +234,12 @@ your integration:
 1. **Forward `subscriber.ip`** (and a honeypot field). The IP unlocks per-IP rate
    limiting; the honeypot silently drops bots.
 2. **There is no "rejected" oracle.** Honeypot hits, spam verdicts (CleanTalk),
-   and "already subscribed to every requested group" all return a normal
+   and "already active in every requested group" all return a normal
    `201 pending` and send **no email** — indistinguishable from a real pending
    attempt. Don't build logic that expects a distinct "blocked" signal; just let
    the confirmation flow run. A genuinely blocked attempt simply never confirms.
+   A contact who had unsubscribed isn't blocked: they're sent the email, so they
+   can confirm and rejoin.
 
 ---
 
@@ -270,8 +283,11 @@ If you've configured outbound webhooks, this flow emits:
 
 - `subscription.requested` — on a successful (non-blocked) start.
 - `subscription.confirmed` — on confirm; payload includes per-group `results` and
-  `contactIds`.
+  `contactIds` (reactivated contacts included).
 - `contact.created` — once per contact actually created.
+- `contact.status_changed` — once per contact reactivated
+  (`previousStatus: "unsubscribed"`, `status: "active"`,
+  `source: "api_subscription"`).
 
 ---
 
