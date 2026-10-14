@@ -197,6 +197,19 @@ page. The token alone identifies the attempt (no `attemptId` needed).
 Confirming an already-confirmed attempt **replays** the original result
 (`alreadyConfirmed: true`, `200`) — retries are safe.
 
+**Only one confirm applies an attempt** (API v0.30.2). A confirm that arrives
+while another is applying the same attempt (a double submit, or the PIN and the
+link of a `both` attempt at once) waits for it and returns the same results with
+`alreadyConfirmed: true`. If the other is still running after a few seconds, it
+gets `409 CONFIRMATION_IN_PROGRESS` (`retryAfterSeconds: 1`); retry shortly and
+you'll get the replay. Treat it as "not finished yet", not as a failure to show
+the subscriber.
+
+**If a confirm fails partway** (a `5xx`), retry it with the same PIN or token.
+Groups it had already applied come back as `subscribed` again, and their
+webhooks fire with the rest when the retry completes. Nothing fires for a
+confirm that didn't complete.
+
 ### 3. Resend — `POST /subscriptions/:attemptId/resend`
 
 Scope `write` · rate cost 5. Issues a **fresh PIN** (new 15-min window, guess
@@ -218,7 +231,7 @@ Never returns the PIN or token.
 | PIN validity | **15 minutes** (refreshed on resend) |
 | Whole attempt / link token | **24 hours** |
 | PIN format | 5 chars, `A–Z2–9` minus look-alikes (`0 O 1 I`), case-insensitive |
-| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` |
+| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` (guesses sent in parallel count too) |
 | Starts per email, per account | **3 / hour** (counts *new* attempts; resends don't count) |
 | Starts per IP, per account | **10 / hour** (only when `subscriber.ip` is sent) |
 | Resends per attempt | 5, with a 60s cooldown — bounded independently of the start caps |
@@ -262,6 +275,7 @@ Errors are JSON `{ "error": "human message", "code": "MACHINE_CODE" }`. Branch o
 | 410 | `ATTEMPT_LOCKED` | 5 wrong PINs — start over |
 | 410 | `ATTEMPT_EXPIRED` | attempt past 24h |
 | 409 | `ALREADY_CONFIRMED` | resend after confirmation |
+| 409 | `CONFIRMATION_IN_PROGRESS` | confirm or resend while another confirm is applying the attempt — retry shortly (`retryAfterSeconds` included); a confirm then gets the replay |
 | 429 | `RATE_LIMITED` | hourly email/IP cap, or resend limit |
 | 429 | `RESEND_COOLDOWN` | within the 60s resend cooldown (`retryAfterSeconds` included) |
 | 403 | `CONTACT_LIMIT_REACHED` | your plan's contact limit (checked at confirm time) |
