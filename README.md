@@ -203,12 +203,16 @@ link of a `both` attempt at once) waits for it and returns the same results with
 `alreadyConfirmed: true`. If the other is still running after a few seconds, it
 gets `409 CONFIRMATION_IN_PROGRESS` (`retryAfterSeconds: 1`); retry shortly and
 you'll get the replay. Treat it as "not finished yet", not as a failure to show
-the subscriber.
+the subscriber. You also get it if the other confirm failed instead; your retry
+then applies the attempt itself.
 
 **If a confirm fails partway** (a `5xx`), retry it with the same PIN or token.
 Groups it had already applied come back as `subscribed` again, and their
-webhooks fire with the rest when the retry completes. Nothing fires for a
-confirm that didn't complete.
+webhooks fire with the rest when the retry completes. If one of those contacts
+was unsubscribed, bounced or removed in between, that change stands: the group
+comes back as `already_subscribed` with its `contactStatus`, and no webhook
+fires for it. A retry isn't refused at your contact limit for the contacts the
+failed confirm already added. Nothing fires for a confirm that didn't complete.
 
 ### 3. Resend — `POST /subscriptions/:attemptId/resend`
 
@@ -231,7 +235,7 @@ Never returns the PIN or token.
 | PIN validity | **15 minutes** (refreshed on resend) |
 | Whole attempt / link token | **24 hours** |
 | PIN format | 5 chars, `A–Z2–9` minus look-alikes (`0 O 1 I`), case-insensitive |
-| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` (guesses sent in parallel count too) |
+| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` (guesses sent in parallel count too; guesses at a PIN that a resend has since replaced don't count against the new one) |
 | Starts per email, per account | **3 / hour** (counts *new* attempts; resends don't count) |
 | Starts per IP, per account | **10 / hour** (only when `subscriber.ip` is sent) |
 | Resends per attempt | 5, with a 60s cooldown — bounded independently of the start caps |
