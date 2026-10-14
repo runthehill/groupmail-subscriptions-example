@@ -158,7 +158,9 @@ PIN-confirm call needs it.
 ### 2a. Confirm with PIN — `POST /subscriptions/:attemptId/confirm`
 
 Scope `write`. Body `{ "pin": "K7QXM" }` (5 chars, case-insensitive). 5 wrong
-guesses **permanently lock** the attempt.
+guesses **lock** the attempt (`410 ATTEMPT_LOCKED`) until a resend issues a new
+PIN, which resets the count. With at most 5 resends, that's at most 30 guesses
+per attempt.
 
 ### 2b. Confirm with link token — `POST /subscriptions/confirm`
 
@@ -235,7 +237,7 @@ Never returns the PIN or token.
 | PIN validity | **15 minutes** (refreshed on resend) |
 | Whole attempt / link token | **24 hours** |
 | PIN format | 5 chars, `A–Z2–9` minus look-alikes (`0 O 1 I`), case-insensitive |
-| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` (guesses sent in parallel count too; guesses at a PIN that a resend has since replaced don't count against the new one) |
+| Wrong-PIN lockout | **5** guesses → `ATTEMPT_LOCKED` (guesses sent in parallel count too; guesses at a PIN that a resend has since replaced don't count against the new one). A resend issues a new PIN and resets the count |
 | Starts per email, per account | **3 / hour** (counts *new* attempts; resends don't count) |
 | Starts per IP, per account | **10 / hour** (only when `subscriber.ip` is sent) |
 | Resends per attempt | 5, with a 60s cooldown — bounded independently of the start caps |
@@ -276,7 +278,7 @@ Errors are JSON `{ "error": "human message", "code": "MACHINE_CODE" }`. Branch o
 | 404 | `ATTEMPT_NOT_FOUND` | unknown `attemptId` |
 | 404 | `INVALID_TOKEN` | unknown / expired / foreign link token |
 | 410 | `PIN_EXPIRED` | PIN past its 15-min window — resend |
-| 410 | `ATTEMPT_LOCKED` | 5 wrong PINs — start over |
+| 410 | `ATTEMPT_LOCKED` | 5 wrong PINs — resend for a new PIN, or start over once the resends are used up |
 | 410 | `ATTEMPT_EXPIRED` | attempt past 24h |
 | 409 | `ALREADY_CONFIRMED` | resend after confirmation |
 | 409 | `CONFIRMATION_IN_PROGRESS` | confirm or resend while another confirm is applying the attempt — retry shortly (`retryAfterSeconds` included); a confirm then gets the replay |

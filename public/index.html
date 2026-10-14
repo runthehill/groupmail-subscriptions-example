@@ -227,7 +227,7 @@
       function messageForCode(code, fallback) {
         switch (code) {
           case 'INVALID_PIN': return 'That PIN is incorrect — please try again.';
-          case 'ATTEMPT_LOCKED': return 'Too many incorrect attempts. Please start over.';
+          case 'ATTEMPT_LOCKED': return 'Too many incorrect attempts. Resend the email for a new code, or start over.';
           case 'PIN_EXPIRED': return 'That PIN has expired — tap “Resend email”.';
           case 'RATE_LIMITED': return 'Too many attempts — please try again later.';
           case 'RESEND_COOLDOWN': return 'Please wait a moment before resending.';
