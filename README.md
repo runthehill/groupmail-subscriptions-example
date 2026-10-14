@@ -213,8 +213,11 @@ Groups it had already applied come back as `subscribed` again, and their
 webhooks fire with the rest when the retry completes. If one of those contacts
 was unsubscribed, bounced or removed in between, that change stands: the group
 comes back as `already_subscribed` with its `contactStatus`, and no webhook
-fires for it. A retry isn't refused at your contact limit for the contacts the
-failed confirm already added. Nothing fires for a confirm that didn't complete.
+fires for it. A group the failed confirm found already subscribed comes back as
+`already_subscribed` again, with its current `contactStatus`: the retry doesn't
+reactivate it, even if the subscriber has unsubscribed since (API v0.30.4). A
+retry isn't refused at your contact limit for the contacts the failed confirm
+already added. Nothing fires for a confirm that didn't complete.
 
 ### 3. Resend — `POST /subscriptions/:attemptId/resend`
 
