@@ -312,6 +312,13 @@ If you've configured outbound webhooks, this flow emits:
   (`previousStatus: "unsubscribed"`, `status: "active"`,
   `source: "api_subscription"`).
 
+A confirm's events (`contact.created`, `contact.status_changed` and
+`subscription.confirmed`) are saved with the confirmation and published from
+there, so a restart or an outage on Groupmail's side can delay them but not lose
+them (API v0.31.0). Now and then one may arrive twice. Each carries a fixed
+`id`, the same on every delivery, so de-duplicate on the payload's `id`. Its
+`timestamp` is when the confirm happened.
+
 ---
 
 ## Running this example
