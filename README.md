@@ -185,7 +185,7 @@ page. The token alone identifies the attempt (no `attemptId` needed).
 | `outcome` | Meaning |
 |---|---|
 | `subscribed` | the contact is now `active` in that group. Usually it was just created. If a contact with that email had **unsubscribed**, it is reactivated instead, and the result carries `reactivated: true` and `contactStatus: "active"`. |
-| `already_subscribed` | a contact with that email was already in the group and nothing changed; `contactId` and `contactStatus` are returned. `active` means it already receives mailings. Any other status (`bounced`, `complaint`, or one the list owner set) means it receives no mailings and was **not** reactivated: only an unsubscribe is the subscriber's to undo. |
+| `already_subscribed` | a contact with that email was already in the group and nothing changed; `contactId` and `contactStatus` are returned. `active` means it already receives mailings. Any other status (`bounced`, `complaint`, or one the list owner set) means it receives no mailings and was **not** reactivated: only an unsubscribe is the subscriber's to undo. On a retry, `contactStatus: "deleted"` with `contactId: null` means the list owner has removed that contact since (see below). |
 | `group_not_found` | group was deleted between start and confirm; skipped |
 
 > **Changed 13 Oct 2026 (API v0.30.0):** an `unsubscribed` contact is now
@@ -211,13 +211,26 @@ then applies the attempt itself.
 **If a confirm fails partway** (a `5xx`), retry it with the same PIN or token.
 Groups it had already applied come back as `subscribed` again, and their
 webhooks fire with the rest when the retry completes. If one of those contacts
-was unsubscribed, bounced or removed in between, that change stands: the group
-comes back as `already_subscribed` with its `contactStatus`, and no webhook
-fires for it. A group the failed confirm found already subscribed comes back as
+was unsubscribed or bounced in between, that change stands: the group comes
+back as `already_subscribed` with its `contactStatus`, and no webhook fires for
+it. A group the failed confirm found already subscribed comes back as
 `already_subscribed` again, with its current `contactStatus`: the retry doesn't
 reactivate it, even if the subscriber has unsubscribed since (API v0.30.4). A
 retry isn't refused at your contact limit for the contacts the failed confirm
 already added. Nothing fires for a confirm that didn't complete.
+
+If the list owner **deleted** one of those contacts in between, or **changed its
+email address**, that stands too: the retry doesn't add the subscriber back. The
+group comes back as `already_subscribed` with `contactStatus: "deleted"` and
+`contactId: null`, and no webhook fires for it. If another contact on that list
+has the subscriber's address by then, the group comes back with that contact and
+its status instead (API v0.31.1). Before, the retry re-created a deleted contact,
+and reported an edited one as `subscribed` with a `contact.created` webhook
+carrying the subscriber's address.
+
+```json
+{ "groupId": "6633cc...e1", "outcome": "already_subscribed", "contactId": null, "contactStatus": "deleted" }
+```
 
 ### 3. Resend — `POST /subscriptions/:attemptId/resend`
 
