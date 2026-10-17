@@ -155,6 +155,18 @@ curl -X POST https://developer.groupmail.io/subscriptions \
 Hand `attemptId` to your front-end — it's **not** a secret (the PIN is), and the
 PIN-confirm call needs it.
 
+**The confirmation email.** Groupmail sends it, by default from Groupmail's own
+address. Its intro text is the group's **Welcome Message** (Group → Subscription
+form settings), which is where your consent or GDPR wording goes.
+
+**From your own address (API v0.32.0).** Groupmail support can set up a verified
+sender for your account: an address on your domain, verified with our sending
+provider. Once a group sends through it, that group's confirmation emails, the
+first and any resends, come from that address with the group's sender name.
+Ask support to set it up. It can't be done from the dashboard or this API, and
+only support can change the address afterwards. Switching a group to that
+sender also sends the group's campaigns from it.
+
 ### 2a. Confirm with PIN — `POST /subscriptions/:attemptId/confirm`
 
 Scope `write`. Body `{ "pin": "K7QXM" }` (5 chars, case-insensitive). 5 wrong
@@ -301,7 +313,7 @@ Errors are JSON `{ "error": "human message", "code": "MACHINE_CODE" }`. Branch o
 | 429 | `RATE_LIMITED` | hourly email/IP cap, or resend limit |
 | 429 | `RESEND_COOLDOWN` | within the 60s resend cooldown (`retryAfterSeconds` included) |
 | 403 | `CONTACT_LIMIT_REACHED` | your plan's contact limit (checked at confirm time) |
-| 502 | `EMAIL_SEND_FAILED` | the confirmation email couldn't be sent |
+| 502 | `EMAIL_SEND_FAILED` | the confirmation email couldn't be sent, including when the sending provider refuses your own sender's address; retry |
 
 **Authentication-layer errors** (raised by the auth middleware before the handler
 runs): `401` with no `code` for a missing / invalid / expired key;
